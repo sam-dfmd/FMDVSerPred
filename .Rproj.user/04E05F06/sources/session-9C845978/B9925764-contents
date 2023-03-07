@@ -1,0 +1,25 @@
+
+#############################################################################
+# Computational Model for Foot-and-Mouth Disease (FMD) Virus classification #
+# and serotype prediction                                                   #
+#############################################################################
+# Feature matrix using k-mer technque
+#' @param dat Dataframe of k-mer counts of the virus isolates usually obtained from kmer techniques.
+#' 
+#' @return Data frame containing normalized feature values of k-mers, where rows are virus isolates & columns are features.
+#' 
+#' @author Samarendra Das
+#' 
+#' @importFrom base lapply
+#' 
+#' @export
+
+#Feature generation
+feat.norm <- function(dat) {
+  id <- rownames(dat)
+  minMax <- function(x) (x - min(x)) / (max(x) - min(x))
+  dta.norm <- as.data.frame(lapply(dat, minMax))
+  row.names(dta.norm) <- id
+  return(dta.norm)
+}
+

@@ -1,0 +1,32 @@
+
+#############################################################################
+# Computational Model for Foot-and-Mouth Disease (FMD) Virus classification #
+# and serotype prediction                                                   #
+#############################################################################
+# Feature matrix using k-mer technque
+#' @param x Nucleotide sequence data of virus isolates in fasta format for model training.
+#' @param serotyp Serotype information of the virus isolates whose sequence data is given in x.
+#' @param QuerySeq Sequence data of the virus isolates in fasta format, whose serotype will be predicted.
+#'
+#' @return Data frame containing probabilities for the serotypes computed for each isolate and right-most column contains predicted serotypes.
+#'
+#' @author Samarendra Das
+#'
+#' @import stats
+#'
+#' @export
+
+serotypPred <- function(x, serotyp, QuerySeq){
+  model1 <- SerotypPredModel (x, serotyp, ind = c(1.0, 0), m = 100, k = 3, n = 8)
+  model2 <- model1$model
+  feat.sel1 <- Feature.sel (x, serotyp, n = 8)$feat.sel
+  dat.q <- Feature.dna(QuerySeq, k=3)
+  dat.q.sel <- dat.q[, match(feat.sel1, colnames(dat.q))]
+  dat.q.norm <- feat.norm(dat.q.sel)
+  remove(model1, feat.sel1, dat.q, dat.q.sel); gc()
+  pred.prob <- predict(model2, dat.q.norm, type = "prob")
+  pred.serotypes <- predict(model2, dat.q.norm, type = "response")
+  out <- data.frame(pred.prob, pred.serotypes)
+  colnames(out) = c(paste(colnames(pred.prob), ".Prob", ""), "Serotypes")
+  return(out)
+}

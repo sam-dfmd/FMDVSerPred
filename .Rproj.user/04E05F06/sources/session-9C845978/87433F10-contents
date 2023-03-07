@@ -1,0 +1,69 @@
+
+#############################################################################
+# Computational Model for Foot-and-Mouth Disease (FMD) Virus classification #
+# and serotype prediction                                                   #
+#############################################################################
+# Feature matrix using k-mer technque
+#' @param x Nucleotide sequence data of virus isolates in fasta format.
+#' @param serotyp Serotype information of the virus isolates whose sequence information was supplied in fasta format.
+#' @param ind vector of two-length whose elements reprsent proportion of data used for model training and testing.
+#' @param m Integral number (>0) indicating the number of runs performed on test data to evaluate the trained model.
+#' @param k Integral number (>0) indicating the size of mers to generate features.
+#' @param n number of features to be considered in model building.
+#' 
+#' 
+#' @return Returns the prediction model along with model fitting measures including mean and standard error in accuracy and prediction error over the runs on test data.
+#' 
+#' @author Samarendra Das
+#' 
+#' @importFrom randomForest randomForest
+#' @importFrom stats predict
+#' 
+#' @export
+
+SerotypPredModel <- function(x, serotyp, ind, m, k, n) {
+  
+  if(missing(k)) k =3
+  if(is.null(k)) {k=3}
+  else(k = k)
+  
+  if(missing(n)) n =8
+  if(is.null(n)) {n=8}
+  else(n = n)
+  
+  if(missing(m)) m = 100
+  if(is.null(m)) {m = 100}
+  else(m = m)
+  
+  if(missing(ind)) ind = c(0.7, 0.3)
+  if(is.null(ind)) ind = c(0.7, 0.3)
+  else(n = n)
+  
+  dat <- Feature.dna (x = x, k = k)
+  dat.sel <- Feature.sel (x = x, serotyp = serotyp, n = n)$x.sel
+  dat.norm <- feat.norm(dat.sel)
+  serotyp <- as.factor(serotyp)
+  
+  result.mod <- vector(mode="numeric", length = m)
+  #Model <- NULL
+  for (i in 1:m){
+    ix.train <- sample(1:nrow(dat.norm), round(ind[1]*nrow(dat.norm)))
+    serotyp.train <- serotyp[ix.train]
+    dta.norm.train <- dat.norm[ix.train, ]
+    dta.norm.test <- dat.norm[-ix.train, ]
+    serotyp.test <- serotyp[-ix.train]
+    model <- randomForest(serotyp.train ~ ., data=dta.norm.train, importance = TRUE,
+                          proximity = TRUE, ntree = 1000, mtry = 1)
+    pred <- predict(model, dta.norm.test)
+    confusionmtx.mod <- table(pred, serotyp.test)
+    #confusionmtx.svm
+    Acc <- sum(diag(confusionmtx.mod)/sum(confusionmtx.mod))
+    result.mod[i] <- Acc
+    #Model <- 
+  }
+  res.mean.mod <- mean(result.mod)
+  res.Se.mod <- sd(result.mod) / sqrt(m)
+  res.err.mod <- mean(1 - result.mod)
+  out.test <- list(res.mean.mod = res.mean.mod, res.Se.mod = res.Se.mod, res.err.mod = res.err.mod, model = model)
+  return(out.test)
+}

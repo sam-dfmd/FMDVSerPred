@@ -1,0 +1,39 @@
+
+#############################################################################
+# Computational Model for Foot-and-Mouth Disease (FMD) Virus classification #
+# and serotype prediction                                                   #
+#############################################################################
+# Relevant Feature Selection
+#' @param x Nucleotide sequence data of virus isolates in fasta format.
+#' @param serotypes Serotype information of the FMD virus isolates, whose sequences are given in x
+#' @param n Integral number (>0) indicating the number of relevant features to be included in the model.
+#' 
+#' @return Data frame containing feature counts of k-mers, where rows are virus isolates & columns are features.
+#' \itemize{
+#'   \item1 feat.sel is the list of selected features.
+#'   \item2 x.sel is the k-mer count of the virus isolates over the selected features.
+#'  }
+#' 
+#' @author Samarendra Das
+#' 
+#' @importFrom FSelector gain.ratio
+#' 
+#' @export
+
+#Feature selection
+Feature.sel <- function (x, serotypes, n) {
+  if(missing(n)) n=8
+  if(is.null(n)) n=8
+  dat <- Feature.dna(x, k=3)
+  id <- rownames(dat)
+  dat <- as.data.frame(dat)
+  serotypes <- as.factor(serotypes)
+  weights.gr <- gain.ratio (serotypes~., dat, unit = "log2")
+  idd.gr <- sort(weights.gr[,1], decreasing = T, index.return=T)$ix
+  x.sel <- dat[, idd.gr[1:n]]
+  feat.sel <- colnames(dat)[idd.gr][1:n]
+  out <- list(feat.sel=feat.sel, x.sel=x.sel)
+  return(out)
+}
+
+

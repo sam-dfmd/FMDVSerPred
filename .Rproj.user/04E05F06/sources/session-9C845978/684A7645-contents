@@ -1,0 +1,19 @@
+Package: FMDVSerPred
+Type: Package
+Title: Foot-and-Mouth Disease (FMD) Virus classification and serotype prediction  
+Version: 0.1.0
+Author: Samarendra Das
+Maintainer: Samarendra Das <samarendra.das@icar.gov.in>
+Description: Computational supervised machine model for Foot-and-Mouth Disease (FMD) Virus classification 
+    and serotype prediction using nucleotide sequence (VP1/whole genome) data. Also, options provided for k-mer feature generation
+    and selection, data pre-processing, model training and testing.
+License: GPL-3
+Encoding: UTF-8
+LazyData: true
+Depends: R (>= 4.2.0)
+RoxygenNote: 7.1.1
+Imports: 
+    stats,
+    kmer,
+    FSelector,
+    randomForest

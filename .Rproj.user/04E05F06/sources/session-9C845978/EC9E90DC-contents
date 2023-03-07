@@ -1,0 +1,338 @@
+library(ape)
+library(kmer)
+library(FSelector)
+library(e1071)
+library(randomForest)
+#kcount
+#################R functions
+#Feature generation
+Feature.dna <- function(x, k) {
+  res <- LETTERS[-c(1, 3, 7, 20)]
+  if(missing(k)) k =3
+  if(is.null(k)) {k=3}
+  else(k = k)
+  data <- kcount(x, k = k, residues = res, encode = FALSE)
+  data <- as.data.frame(data)
+  return(data)
+}
+#gain.ratio
+######### Feature selection
+Feature.sel <- function (x, serotypes, n) {
+  if(missing(n)) n=8
+  if(is.null(n)) n=8
+  dat <- Feature.dna(x, k=3)
+  id <- rownames(dat)
+  dat <- as.data.frame(dat)
+  serotypes <- as.factor(serotypes)
+  weights.gr <- gain.ratio (serotypes~., dat, unit = "log2")
+  idd.gr <- sort(weights.gr[,1], decreasing = T, index.return=T)$ix
+  x.sel <- dat[, idd.gr[1:n]]
+  feat.sel <- colnames(dat)[idd.gr][1:n]
+  out <- list(feat.sel=feat.sel, x.sel=x.sel)
+  return(out)
+}
+
+##################Normalization
+feat.norm <- function(dat) {
+  id <- rownames(dat)
+  minMax <- function(x) (x - min(x)) / (max(x) - min(x))
+  dta.norm <- as.data.frame(lapply(dat, minMax))
+  row.names(dta.norm) <- id
+  return(dta.norm)
+}
+
+################### Model Building
+SerotypPredModel <- function(x, serotyp, ind, m, k, n) {
+
+  if(missing(k)) k =3
+  if(is.null(k)) {k=3}
+  else(k = k)
+
+  if(missing(n)) n =8
+  if(is.null(n)) {n=8}
+  else(n = n)
+
+   if(missing(m)) m = 100
+  if(is.null(m)) {m = 100}
+  else(m = m)
+
+   if(missing(ind)) ind = c(0.7, 0.3)
+   if(is.null(ind)) ind = c(0.7, 0.3)
+   else(n = n)
+
+  dat <- Feature.dna (x = x, k = k)
+  dat.sel <- Feature.sel (x = x, serotyp = serotyp, n = n)$x.sel
+  dat.norm <- feat.norm(dat.sel)
+  serotyp <- as.factor(serotyp)
+
+  result.mod <- vector(mode="numeric", length = m)
+  #Model <- NULL
+  for (i in 1:m){
+    ix.train <- sample(1:nrow(dat.norm), round(ind[1]*nrow(dat.norm)))
+    serotyp.train <- serotyp[ix.train]
+    dta.norm.train <- dat.norm[ix.train, ]
+    dta.norm.test <- dat.norm[-ix.train, ]
+    serotyp.test <- serotyp[-ix.train]
+    model <- randomForest(serotyp.train ~ ., data=dta.norm.train, importance = TRUE,
+                          proximity = TRUE, ntree = 1000, mtry = 1)
+    pred <- predict(model, dta.norm.test)
+    confusionmtx.mod <- table(pred, serotyp.test)
+    #confusionmtx.svm
+    Acc <- sum(diag(confusionmtx.mod)/sum(confusionmtx.mod))
+    result.mod[i] <- Acc
+    #Model <-
+    }
+     res.mean.mod <- mean(result.mod)
+      res.Se.mod <- sd(result.mod) / sqrt(m)
+     res.err.mod <- mean(1 - result.mod)
+      out.test <- list(res.mean.mod = res.mean.mod, res.Se.mod = res.Se.mod, res.err.mod = res.err.mod, model = model)
+      return(out.test)
+   }
+#######
+#serotypPred.test <- function(x, serotyp, TestSeq, serotyp.test){
+  #x <- dat11
+  #TestSeq <- dat.afg
+  #serotyp.test <- as.factor(as.vector(serotyp.afg[,2]))
+  #model1 <- SerotypPredModel (x, serotyp, ind = c(1.0, 0), m = 100, k = 3, n = 8)
+  #model2 <- model1$model
+  #feat.sel1 <- Feature.sel (x, serotyp, n = 8)$feat.sel
+  #dat.q <- Feature.dna(TestSeq, k=3)
+  #dat.q.sel <- dat.q[, match(feat.sel1, colnames(dat.q))]
+  #dat.q.norm <- feat.norm(dat.q.sel)
+  #remove(model1, feat.sel1, dat.q, dat.q.sel); gc()
+  #pred.prob <- predict(model2, dat.q.norm, type = "prob")
+  #pred.serotypes <- predict(model2, dat.q.norm, type = "response")
+  #pred.serotypes <- as.factor(pred.serotypes)
+  #out <- data.frame(pred.prob, pred.serotypes)
+  #colnames(out) = c(paste(colnames(pred.prob), ".Prob", ""), "Serotypes")
+  #serotyp.test <- as.factor(serotyp.test)
+  #confusionmtx.test <- table(serotyp.test, pred.serotypes)
+  #Acc <- sum(diag(confusionmtx.test)/sum(confusionmtx.test)) * 100
+  #out1 <- list(out=out, ConfusionMatrix = confusionmtx.test, Accuracy = Acc)
+  #remove(out, confusionmtx.test, Acc, serotyp.test)
+  #return(out1)
+#}
+#########
+serotypPred <- function(x, serotyp, QuerySeq){
+  model1 <- SerotypPredModel (x, serotyp, ind = c(1.0, 0), m = 100, k = 3, n = 8)
+  model2 <- model1$model
+  feat.sel1 <- Feature.sel (x, serotyp, n = 8)$feat.sel
+  dat.q <- Feature.dna(QuerySeq, k=3)
+  dat.q.sel <- dat.q[, match(feat.sel1, colnames(dat.q))]
+  dat.q.norm <- feat.norm(dat.q.sel)
+  remove(model1, feat.sel1, dat.q, dat.q.sel); gc()
+  pred.prob <- predict(model2, dat.q.norm, type = "prob")
+  pred.serotypes <- predict(model2, dat.q.norm, type = "response")
+  out <- data.frame(pred.prob, pred.serotypes)
+  colnames(out) = c(paste(colnames(pred.prob), ".Prob", ""), "Serotypes")
+  return(out)
+}
+
+##################Serotypes prediction accuarcy
+serotypPredTest <- function(x, serotyp, QuerySeq, serotypTest) {
+  reslt <- serotypPred (x, serotyp, QuerySeq)
+  pred.serotyp <- reslt$Serotypes
+  remove(reslt); gc()
+  serotypTest <- as.factor(serotypTest)
+  confusionmtx.test <- table(serotypTest, pred.serotyp)
+  names(dimnames(confusionmtx.test)) <- c("Actual", "Predicted")
+  Acc <- round(sum(diag(confusionmtx.test)/sum(confusionmtx.test)) * 100, 3)
+  out1 <- list(PredictedSerotypes = pred.serotyp, ConfusionMatrix = confusionmtx.test, Accuracy = Acc)
+  remove(confusionmtx.test, Acc, pred.serotyp)
+  return(out1)
+}
+############### Serotype prediction with background data
+serotypPred.bg <- function(QuerySeq) {
+  model1 <- SerotypPredModel (x = dat11, serotyp = serotyp, ind = c(1, 0), m = 1, k = 3, n = 8)
+  model2 <- model1$model
+  feat.sel1 <- Feature.sel (x = dat11, serotyp = serotyp, n = 8)$feat.sel
+  dat.q <- Feature.dna(QuerySeq, k=3)
+  dat.q.sel <- dat.q[, match(feat.sel1, colnames(dat.q))]
+  dat.q.norm <- feat.norm(dat.q.sel)
+  remove(model1, feat.sel1, dat.q, dat.q.sel); gc()
+  pred.prob <- predict(model2, dat.q.norm, type = "prob")
+  pred.serotypes <- predict(model2, dat.q.norm, type = "response")
+  out <- data.frame(pred.prob, pred.serotypes)
+  colnames(out) = c(paste(colnames(pred.prob), ".Prob", ""), "Serotypes")
+  return(out)
+}
+
+##############Function test
+setwd("E:/DFMD/DFMD_Research_Work/Serotype_Prediction/Data_VP1Sequence/India")
+dat11 <- read.dna(file="Data1.fasta",format="fasta")
+dim(dat11)
+serotyp <- as.factor(c(rep("A",85),rep("Asia 1",110),rep("O",150)))
+length(serotyp)
+
+dat2 <- read.dna(file="Data2.fasta",format="fasta")
+serotyp.val <- c(rep("A",63),rep("Asia 1",64),rep("O",93))
+
+dat12 <- read.dna(file="VP1ICFMD19.fasta",format="fasta")
+#dat13 <- read.dna(file="VP1ICFMD18-19.fasta",format="fasta")
+dat12
+dat <- Feature.dna (x = dat11, k = 5)
+dim(dat)
+head(dat)
+dat.sel <- Feature.sel(x = dat11, serotypes = serotyp, n = 8)
+dat1.sel <- dat.sel$x.sel
+dat.norm <- feat.norm(dat1.sel)
+
+mod <- SerotypPredModel (x=dat11, serotyp =serotyp, ind=c(0.8, 0.2), m=100, k=3, n=8)
+mod1 <- mod$model
+pred.q19 <- serotypPred(x =dat11, serotyp=serotyp, QuerySeq=dat12)
+#pred.q18 <- serotypPred(x =dat11, serotyp=serotyp, QuerySeq=dat13)
+#table(pred.q18[,4])
+
+#res.test <- serotypPredTest(x=dat11, serotyp=serotyp, TestSeq=dat2, serotyp.test=serotyp.val)
+res.test <- serotypPredTest(x = dat11, serotyp=serotyp, QuerySeq=dat2, serotypTest=serotyp.val)
+################
+dat.val <-  read.dna(file="DataVal.fasta",format="fasta")
+serotyp.val <- c(rep("O", 331), rep("A", 62),rep("Asia 1", 124))
+
+#######repeat for validation
+serotyp.val <- as.factor(serotyp.val)
+vall <- serotypPredTest(x = dat11, serotyp = serotyp, QuerySeq = dat2, serotypTest = serotyp.val)
+
+############## Model testing with neighboring country data
+setwd("E:/DFMD/DFMD_Research_Work/Serotype_Prediction/Data_VP1Sequence/India/Country-wise/NeighborData")
+########Afghanistan
+dat.afg <-  read.dna(file="Afghanistan.fasta",format="fasta")
+dat.afg
+#samp <- summary(dat.bhu)
+#write.csv(samp, file="bhutan.csv")
+#class(samp)
+
+serotyp.afg <- read.table(file = "Sero_afghan.txt", header = TRUE, row.names = 1, sep="\t")
+head(serotyp.afg)
+dim(serotyp.afg)
+serotyp.afgh <- as.factor(as.vector(serotyp.afg[,2]))
+length(serotyp.afgh)
+table(serotyp.afgh)
+test.afgh <- serotypPredTest(x=dat11, serotyp=serotyp, QuerySeq=dat.afg, serotypTest=serotyp.afgh)
+#seroTest <- test.afgh$PredictedSerotypes
+print(test.afgh)
+test.afgh$ConfusionMatrix
+#write.csv(seroTest, file="sertypFMD.csv")
+
+##########Bangladesh
+dat.bang <- read.dna(file="Bangladesh.fasta",format="fasta")
+dat.bang
+serotyp.bang <- read.table(file = "Sero_bangl.txt", header = TRUE, row.names = 1, sep="\t")
+dim(serotyp.bang)
+serotyp.bang <- as.factor(as.vector(serotyp.bang[,2]))
+length(serotyp.bang)
+table(serotyp.bang)
+test.bang <- serotypPredTest(x=dat11, serotyp=serotyp, QuerySeq=dat.bang, serotypTest=serotyp.bang)
+seroTest <- test.bang$PredictedSerotypes
+write.csv(seroTest, file="sertypFMD.csv")
+
+#################Bhutan
+dat.bhu <- read.dna(file="Bhutan.fasta",format="fasta")
+dat.bhu
+serotyp.bhu <- read.table(file = "Sero_bhut.txt", header = TRUE, row.names = 1, sep="\t")
+dim(serotyp.bhu)
+serotyp.bhu <- as.factor(as.vector(serotyp.bhu[,2]))
+length(serotyp.bhu)
+table(serotyp.bhu)
+test.bhu <- serotypPredTest(x=dat11, serotyp=serotyp, QuerySeq=dat.bhu, serotypTest=serotyp.bhu)
+seroTest <- test.bhu$PredictedSerotypes
+write.csv(seroTest, file="sertypFMD.csv")
+
+#############Srilanks
+dat.sri <- read.dna(file="Srilanka.fasta",format="fasta")
+dat.sri
+serotyp.sri <- read.table(file = "Sero_srilank.txt", header = TRUE, row.names = 1, sep="\t")
+dim(serotyp.sri)
+serotyp.sri <- as.factor(as.vector(serotyp.sri[, 1]))
+length(serotyp.sri)
+table(serotyp.sri)
+test.sri <- serotypPredTest(x=dat11, serotyp=serotyp, QuerySeq=dat.sri, serotypTest=serotyp.sri)
+seroTest <- test.sri$PredictedSerotypes
+write.csv(seroTest, file="sertypFMD.csv")
+
+################Nepal
+dat.nep <- read.dna(file="Nepal.fasta",format="fasta")
+dat.nep
+serotyp.nep <- read.table(file = "Sero_nep.txt", header = TRUE, row.names = 1)
+dim(serotyp.nep)
+serotyp.nep[66,] <- "Asia 1"
+serotyp.nep <- as.factor(as.vector(serotyp.nep[, 1]))
+length(serotyp.nep)
+table(serotyp.nep)
+test.nep <- serotypPredTest(x=dat11, serotyp = serotyp, QuerySeq = dat.nep, serotypTest=serotyp.nep)
+seroTest <- test.nep$PredictedSerotypes
+write.csv(seroTest, file="sertypFMD.csv")
+
+#######Pakistan
+dat.pak <- read.dna(file="Pakistan.fasta",format="fasta")
+dat.pak
+serotyp.pak <- read.table(file = "Sero_pak.txt", header = TRUE, row.names = 1)
+dim(serotyp.pak)
+serotyp.pak <- as.factor(as.vector(serotyp.pak[, 1]))
+class(serotyp.pak)
+length(serotyp.pak)
+table(serotyp.pak)
+test.pak <- serotypPredTest(x = dat11, serotyp = serotyp, QuerySeq = dat.pak, serotypTest = serotyp.pak)
+seroTest <- test.pak$PredictedSerotypes
+write.csv(seroTest, file="sertypFMD.csv")
+
+##########China
+dat.chn <- read.dna(file="China.fasta",format="fasta")
+dat.chn
+serotyp.chn <- read.table(file = "Sero_chin.txt", header = TRUE, row.names = 1)
+dim(serotyp.chn)
+serotyp.chn <- as.factor(as.vector(serotyp.chn[, 1]))
+length(serotyp.chn)
+table(serotyp.chn)
+class(serotyp.chn)
+test.chn <- serotypPredTest(x = dat11, serotyp = serotyp, QuerySeq = dat.chn, serotypTest = serotyp.chn)
+seroTest <- test.pak$PredictedSerotypes
+write.csv(seroTest, file="sertypFMD.csv")
+
+############# Test data
+SerotypPredModel <- function(x, serotyp, ind, m, k, n) {
+
+  if(missing(k)) k =3
+  if(is.null(k)) {k=3}
+  else(k = k)
+
+  if(missing(n)) n =8
+  if(is.null(n)) {n=8}
+  else(n = n)
+
+  if(missing(m)) m = 100
+  if(is.null(m)) {m = 100}
+  else(m = m)
+
+  if(missing(ind)) ind = c(0.7, 0.3)
+  if(is.null(ind)) ind = c(0.7, 0.3)
+  else(n = n)
+
+  dat <- Feature.dna (x = x, k = k)
+  dat.sel <- Feature.sel (x = x, serotyp = serotyp, n = n)$x.sel
+  dat.norm <- feat.norm(dat.sel)
+  serotyp <- as.factor(serotyp)
+
+  result.mod <- vector(mode="numeric", length = m)
+  #Model <- NULL
+  for (i in 1:m){
+    ix.train <- sample(1:nrow(dat.norm), round(ind[1]*nrow(dat.norm)))
+    serotyp.train <- serotyp[ix.train]
+    dta.norm.train <- dat.norm[ix.train, ]
+    dta.norm.test <- dat.norm[-ix.train, ]
+    serotyp.test <- serotyp[-ix.train]
+    model <- randomForest(serotyp.train ~ ., data=dta.norm.train, importance = TRUE,
+                          proximity = TRUE, ntree = 1000, mtry = 1)
+    pred <- predict(model, dta.norm.test)
+    confusionmtx.mod <- table(pred, serotyp.test)
+    #confusionmtx.svm
+    Acc <- sum(diag(confusionmtx.mod)/sum(confusionmtx.mod))
+    result.mod[i] <- Acc
+    #Model <-
+  }
+  res.mean.mod <- mean(result.mod)
+  res.Se.mod <- sd(result.mod) / sqrt(m)
+  res.err.mod <- mean(1 - result.mod)
+  out.test <- list(res.mean.mod = res.mean.mod, res.Se.mod = res.Se.mod, res.err.mod = res.err.mod, model = model)
+  return(out.test)
+}

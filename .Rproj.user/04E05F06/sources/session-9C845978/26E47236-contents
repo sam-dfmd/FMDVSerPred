@@ -1,0 +1,37 @@
+
+#############################################################################
+# Computational Model for Foot-and-Mouth Disease (FMD) Virus classification #
+# and serotype prediction                                                   #
+#############################################################################
+# Feature matrix using k-mer technque
+
+#' @param x Nucleotide sequence data of virus isolates in fasta format for model training.
+#' @param serotyp vector (size equal to number of virus isolates in x) containing serotype information of virus in x.
+#' @param QuerySeq Sequnce data of of virus isolates in fasta format used for testing the trained model.
+#' @param serotypTest vector (size equal to QuerySeq length) containing the serotype information of the isolates of QuerySeq.
+#'
+#' @return List containing predicted serotypes of isolates, Confusion matrix for trained model testing, accuracy of the trained model on test data.
+#' \itemize{
+#'   \item1 PredictedSerotypes conatins the serotype of isolates in TestSeq data using the trained model.
+#'   \item2 ConfusionMatrix confusion matrix constructed by predicted serotypes vs. actual serotypes of the isolates in TestSea data.
+#'   \item3 Accuracy is the trained model accuracy measure computed from the test
+#'  }
+#' @author Samarendra Das
+#'
+#' @import stats
+#'
+#' @export
+
+serotypPredTest <- function(x, serotyp, QuerySeq, serotypTest) {
+  reslt <- serotypPred (x, serotyp, QuerySeq)
+  pred.serotyp <- reslt$Serotypes
+  remove(reslt); gc()
+  serotypTest <- as.factor(serotypTest)
+  confusionmtx.test <- table(serotypTest, pred.serotyp)
+  names(dimnames(confusionmtx.test)) <- c("Actual", "Predicted")
+  Acc <- round(sum(diag(confusionmtx.test)/sum(confusionmtx.test)) * 100, 3)
+  out1 <- list(PredictedSerotypes = pred.serotyp, ConfusionMatrix = confusionmtx.test, Accuracy = Acc)
+  remove(confusionmtx.test, Acc, pred.serotyp)
+  return(out1)
+}
+
